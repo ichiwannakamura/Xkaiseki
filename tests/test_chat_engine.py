@@ -118,3 +118,19 @@ def test_chat_rate_limit_returns_error_message():
 
     # Assert
     assert "しばらく待って" in result
+
+
+def test_chat_timeout_returns_error_message():
+    # Arrange
+    import anthropic
+
+    with patch("anthropic.Anthropic") as MockAnthropic:
+        mock_client = MockAnthropic.return_value
+        exc = anthropic.APITimeoutError.__new__(anthropic.APITimeoutError)
+        mock_client.messages.create.side_effect = exc
+
+        # Act
+        result = chat("質問", "sk-test", {}, [])
+
+    # Assert
+    assert "タイムアウト" in result
