@@ -1,21 +1,29 @@
 # 🧠 AI自己進化メモリ (MEMORY & SKILLS)
 
-> **🤖 AIへの絶対指示**
-> - エラーを解決した時、新しい実装パターンを確立した時、またはワンさんから特定のルールを指示された時は、直ちにこのファイルに「スキル（知見）」として追記すること。
-> - 新しいタスクを開始する前は、必ずこのファイルを読み込み、過去の失敗を繰り返さない（Red/Blue Agentの検証に活かす）こと。
-> - 説明は例外なく、赤ちゃんでも理解できるほど噛み砕いた日本語で書くこと。
-
 ---
 
 ## 💡 獲得したスキルと失敗録 (Learned Skills & Post-mortems)
 
-### 📝 記録日: YYYY-MM-DD
-- **🐛 発生した問題 (Problem):**
-  - （例：〇〇のコマンドを実行したら、権限エラーで止まってしまった）
-- **🔍 根本原因 (Root Cause):**
-  - （例：この環境ではsudoが使えない設定になっていたため）
-- **🛡️ 解決策・次からの対策 (Solution & Prevention):**
-  - （例：今後はsudoを使わず、ユーザー権限の範囲内で〇〇のコマンドを使うようにする。実行前には必ずワンさんに確認をとる）
+### 📝 記録日: 2026-03-19
+
+- **💡 知見: anthropic SDK 0.83.0 での例外モック方法**
+  - **問題:** `anthropic.AuthenticationError(message="...", response=MagicMock(status_code=401), body={})` が `TypeError` になる（httpx.Response が必須）
+  - **根本原因:** SDK 0.83.0 では例外コンストラクタが httpx.Response インスタンスを必須とする仕様に変更された
+  - **解決策:** テストでは `exc = anthropic.AuthenticationError.__new__(anthropic.AuthenticationError)` を使って `__new__()` 経由でインスタンス化してから `side_effect` に設定する
+
+### 📝 記録日: 2026-03-19
+
+- **💡 知見: Windows環境でのgit check-ignoreの注意点**
+  - **問題:** `git check-ignore .worktrees` がディレクトリ未存在時に "not ignored" を返す
+  - **根本原因:** `.gitignore` に `.worktrees/`（末尾スラッシュ）で記載されている場合、ディレクトリが実在しないと `git check-ignore` が反応しない
+  - **解決策:** `mkdir -p .worktrees` で先にディレクトリを作成してから `git check-ignore` で確認する
+
+### 📝 記録日: 2026-03-19
+
+- **💡 知見: KB検索の設計パターン**
+  - **問題:** ベクトル検索はStreamlit Cloudのメモリ制限（1GB）に引っかかるリスクがある
+  - **解決策:** lowercase部分一致 OR 検索（最大3件）でシンプルに実装。5トピック程度の小さなKBならこれで十分。
+  - **適用場面:** 軽量なRAGが必要でリソース制限がある場合
 
 ---
-（※以降、AIが新しい学びを得るたびに、上に追記していくこと）
+（新しい学びを得たら上に追記すること）
