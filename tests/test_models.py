@@ -56,3 +56,32 @@ def test_grok_uses_xai_base_url():
         GrokAdapter().chat([{"role": "user", "content": "test"}], "xai-test")
         call_kwargs = MockClient.call_args[1]
     assert "x.ai" in call_kwargs.get("base_url", "")
+
+
+import sys
+import types
+
+# google.generativeai がインストールされていない環境でも patch できるよう
+# sys.modules に仮モジュールを登録しておく
+_fake_genai = types.ModuleType("google.generativeai")
+_fake_google = types.ModuleType("google")
+_fake_google.generativeai = _fake_genai
+sys.modules.setdefault("google", _fake_google)
+sys.modules.setdefault("google.generativeai", _fake_genai)
+
+from src.models.gemini import GeminiAdapter
+
+def test_gemini_returns_text():
+    mock_response = MagicMock()
+    mock_response.text = "Geminiの回答"
+    mock_chat = MagicMock()
+    mock_chat.send_message.return_value = mock_response
+    mock_model = MagicMock()
+    mock_model.start_chat.return_value = mock_chat
+    with patch("google.generativeai.configure", create=True), \
+         patch("google.generativeai.GenerativeModel", return_value=mock_model, create=True):
+        result = GeminiAdapter().chat([{"role": "user", "content": "test"}], "AIza-test")
+    assert result == "Geminiの回答"
+
+def test_gemini_model_name():
+    assert GeminiAdapter().model_name == "gemini"
