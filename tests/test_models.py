@@ -21,3 +21,38 @@ def test_claude_invalid_key_returns_error():
 
 def test_claude_model_name():
     assert ClaudeAdapter().model_name == "claude"
+
+
+from src.models.openai_gpt import OpenAIGPTAdapter
+from src.models.grok import GrokAdapter
+import openai
+
+def test_gpt_returns_text():
+    mock_resp = MagicMock()
+    mock_resp.choices = [MagicMock(message=MagicMock(content="GPTの回答"))]
+    with patch("openai.OpenAI") as MockClient:
+        MockClient.return_value.chat.completions.create.return_value = mock_resp
+        result = OpenAIGPTAdapter().chat([{"role": "user", "content": "test"}], "sk-test")
+    assert result == "GPTの回答"
+
+def test_gpt_invalid_key_returns_error():
+    exc = openai.AuthenticationError.__new__(openai.AuthenticationError)
+    with patch("openai.OpenAI") as MockClient:
+        MockClient.return_value.chat.completions.create.side_effect = exc
+        result = OpenAIGPTAdapter().chat([{"role": "user", "content": "test"}], "bad")
+    assert "APIキーが正しくありません" in result
+
+def test_gpt_model_name():
+    assert OpenAIGPTAdapter().model_name == "gpt"
+
+def test_grok_model_name():
+    assert GrokAdapter().model_name == "grok"
+
+def test_grok_uses_xai_base_url():
+    mock_resp = MagicMock()
+    mock_resp.choices = [MagicMock(message=MagicMock(content="Grokの回答"))]
+    with patch("openai.OpenAI") as MockClient:
+        MockClient.return_value.chat.completions.create.return_value = mock_resp
+        GrokAdapter().chat([{"role": "user", "content": "test"}], "xai-test")
+        call_kwargs = MockClient.call_args[1]
+    assert "x.ai" in call_kwargs.get("base_url", "")
