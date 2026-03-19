@@ -1,215 +1,203 @@
-"""
-Xkaiseki — X推薦アルゴリズム解析チャット
-Streamlit メインUI
-"""
+# 🏠_ホーム.py
 import streamlit as st
 from pathlib import Path
-from src.knowledge_base import load_knowledge_base
-from src.chat_engine import chat
+from src.config import load_config, save_config, is_setup_complete, MODEL_NAMES
+from src.retriever import search, DEFAULT_DB_PATH
+from src.dispatcher import dispatch
 
-# ─── ページ設定 ───────────────────────────────────────────────
-st.set_page_config(
-    page_title="Xkaiseki",
-    page_icon="🔍",
-    layout="centered",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Xkaiseki", page_icon="🔍", layout="wide")
 
-# ─── ダークテーマ CSS ─────────────────────────────────────────
+# ===== CSS =====
 st.markdown("""
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600;700&display=swap');
-
-  :root {
-    --bg-main:    #0F172A;
-    --bg-card:    #1E293B;
-    --border:     #334155;
-    --text-main:  #F1F5F9;
-    --text-sub:   #94A3B8;
-    --accent:     #1D9BF0;
-    --success:    #22C55E;
-    --warning:    #F59E0B;
-    --error:      #EF4444;
-  }
-
-  .stApp { background-color: var(--bg-main); color: var(--text-main); }
-  h1, h2, h3 { font-family: 'Space Grotesk', sans-serif; color: var(--text-main); }
-  p, li, label { font-family: 'Inter', sans-serif; font-size: 1rem; color: var(--text-main); }
-
-  /* チャットメッセージ */
-  .chat-user {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 12px 16px;
-    margin: 8px 0;
-    text-align: right;
-  }
-  .chat-assistant {
-    background: var(--bg-card);
-    border: 1px solid var(--accent);
-    border-radius: 12px;
-    padding: 12px 16px;
-    margin: 8px 0;
-  }
-
-  /* クイック質問ボタン */
-  .stButton > button {
-    background: var(--bg-card);
-    color: var(--text-main);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 8px 12px;
-    font-size: 0.875rem;
-    transition: all 0.2s;
-    min-height: 44px;
-    cursor: pointer;
-  }
-  .stButton > button:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
+body { background: #0F172A; color: #F1F5F9; }
+.model-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px;
+  border-radius: 8px; border: 2px solid #334155; cursor: pointer;
+  font-size: 0.82rem; font-weight: 500; margin-right: 6px; }
 </style>
 """, unsafe_allow_html=True)
 
-# ─── Session State 初期化 ────────────────────────────────────
+MODEL_COLORS = {
+    "claude": "#7c3aed", "gpt": "#10a37f", "gemini": "#4285f4", "grok": "#e7482e"
+}
+MODEL_LABELS = {
+    "claude": "Claude", "gpt": "GPT", "gemini": "Gemini", "grok": "Grok"
+}
+
+# ===== セッション初期化 =====
 if "history" not in st.session_state:
     st.session_state.history = []
-if "api_key" not in st.session_state:
-    st.session_state.api_key = ""
-if "kb" not in st.session_state:
-    st.session_state.kb = {}
-if "kb_loaded" not in st.session_state:
-    st.session_state.kb_loaded = False
+if "show_setup" not in st.session_state:
+    st.session_state.show_setup = not is_setup_complete()
+if "view_mode" not in st.session_state:
+    st.session_state.view_mode = "tab"
+if "active_tab" not in st.session_state:
+    st.session_state.active_tab = "claude"
+if "last_answers" not in st.session_state:
+    st.session_state.last_answers = {}
 
-# ─── KB ロード ────────────────────────────────────────────────
-KB_PATH = Path(__file__).parent / "data" / "knowledge_base.json"
 
-if not st.session_state.kb_loaded:
-    if KB_PATH.exists():
-        try:
-            st.session_state.kb = load_knowledge_base(str(KB_PATH))
-            st.session_state.kb_loaded = True
-        except Exception as e:
-            st.session_state.kb = {}
-    else:
-        st.session_state.kb = {}
+# ===== セットアップ画面 =====
+def render_setup():
+    st.title("⚙️ セットアップ")
+    st.caption("初回のみ設定します。次回から自動で読み込まれます。")
 
-# ─── サイドバー ───────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("## 🔍 Xkaiseki")
-    st.markdown("X推薦アルゴリズム解析チャット")
-    st.divider()
+    config = load_config()
 
-    if not st.session_state.kb_loaded:
-        st.warning("⚠️ knowledge_base.json が見つかりません。\n`generate_kb.py` を実行してください。")
-    else:
-        st.success("✅ ナレッジベース読み込み済み")
+    st.subheader("使用するモデルを選択（複数可）")
+    enabled = set(config.get("enabled_models", []))
+    new_enabled = []
+    cols = st.columns(4)
+    for i, name in enumerate(MODEL_NAMES):
+        with cols[i]:
+            if st.checkbox(MODEL_LABELS[name], value=name in enabled, key=f"chk_{name}"):
+                new_enabled.append(name)
 
-    st.divider()
-    st.markdown("### 使い方ガイド")
-    st.markdown("""
-1. Anthropic API キーを入力
-2. 質問を入力または下のボタンをクリック
-3. マーケター向け + 技術的解説が届きます
+    st.subheader("APIキー")
+    claude_key = st.text_input("Claude (Anthropic)", value=config.get("claude_api_key", ""), type="password")
+    gpt_key    = st.text_input("GPT (OpenAI)",       value=config.get("gpt_api_key", ""),    type="password")
+    gemini_key = st.text_input("Gemini (Google)",    value=config.get("gemini_api_key", ""), type="password")
+    grok_key   = st.text_input("Grok (xAI)",         value=config.get("grok_api_key", ""),   type="password")
 
-**API キーの取得:**
-[Anthropic Console](https://console.anthropic.com)
-""")
-
-    st.divider()
-    if st.button("会話をリセット", use_container_width=True):
-        st.session_state.history = []
-        st.rerun()
-
-# ─── メインコンテンツ ─────────────────────────────────────────
-st.markdown("# 🔍 Xkaiseki")
-st.markdown("X推薦アルゴリズムに基づく、アフィリエイトアカウント運用アドバイザー")
-
-# API キー入力
-api_key_input = st.text_input(
-    "🔑 Anthropic API Key",
-    type="password",
-    placeholder="sk-ant-...",
-    value=st.session_state.api_key,
-    help="あなた自身のAPIキーを使用します。サーバーには保存されません。"
-)
-if api_key_input:
-    st.session_state.api_key = api_key_input
-
-# ─── クイック質問ボタン ───────────────────────────────────────
-QUICK_QUESTIONS = [
-    "1万インプレッションへのロードマップを教えて",
-    "絶対にやってはいけないNG行動を教えて",
-    "いいねの正しい使い方と影響を教えて",
-    "For Youに出やすくなる投稿の条件は？",
-    "アフィリエイトリンクはどう扱えばいい？"
-]
-
-st.markdown("**よくある質問:**")
-cols = st.columns(len(QUICK_QUESTIONS))
-quick_question = None
-for col, q in zip(cols, QUICK_QUESTIONS):
-    with col:
-        label = q[:10] + "…" if len(q) > 10 else q
-        if st.button(label, key=f"quick_{q}", help=q):
-            quick_question = q
-
-st.divider()
-
-# ─── チャット表示 ─────────────────────────────────────────────
-st.markdown("### 💬 チャット")
-
-# ウェルカムメッセージ
-if not st.session_state.history:
-    st.markdown("""
-<div class="chat-assistant">
-🤖 <strong>Xkaisekiへようこそ。</strong><br>
-X（旧Twitter）の推薦アルゴリズムについて何でも聞いてください。<br>
-アフィリエイトアカウントで成果を出すための具体的なアドバイスをお伝えします。
-</div>
-""", unsafe_allow_html=True)
-
-# 会話履歴を表示
-for msg in st.session_state.history:
-    if msg["role"] == "user":
-        st.markdown(f'<div class="chat-user">👤 {msg["content"]}</div>', unsafe_allow_html=True)
-    else:
-        st.markdown(f'<div class="chat-assistant">🤖 {msg["content"]}</div>', unsafe_allow_html=True)
-
-# ─── 入力エリア ───────────────────────────────────────────────
-chat_disabled = not bool(st.session_state.api_key)
-
-with st.form("chat_form", clear_on_submit=True):
-    user_input = st.text_area(
-        "質問を入力",
-        placeholder="例：いいねはスコアにどう影響しますか？" if not chat_disabled else "APIキーを入力してください",
-        disabled=chat_disabled,
-        height=80,
-        label_visibility="collapsed"
-    )
-    submit = st.form_submit_button(
-        "送信 →",
-        disabled=chat_disabled,
-        use_container_width=True
+    st.subheader("検索方式")
+    search_mode = st.radio(
+        "ソースコード検索方式",
+        options=["fts", "vector"],
+        format_func=lambda x: "キーワード検索（追加不要）" if x == "fts" else "意味検索（初回~100MBダウンロード）",
+        index=0 if config.get("search_mode", "fts") == "fts" else 1,
+        horizontal=True,
     )
 
-# ─── 送信処理 ─────────────────────────────────────────────────
-question = quick_question or (user_input.strip() if submit and user_input.strip() else None)
+    if not DEFAULT_DB_PATH.exists():
+        st.warning("⚠️ ソースコードインデックスが見つかりません。index_source.py を実行してください。")
 
-if question:
-    if not st.session_state.api_key:
-        st.error("APIキーを入力してください。")
-    else:
-        st.session_state.history.append({"role": "user", "content": question})
-
-        with st.spinner("解析中..."):
-            answer = chat(
-                question=question,
-                api_key=st.session_state.api_key,
-                kb=st.session_state.kb,
-                history=st.session_state.history[:-1]
-            )
-
-        st.session_state.history.append({"role": "assistant", "content": answer})
+    if st.button("チャットを開始 →", type="primary", disabled=not new_enabled):
+        save_config({
+            "claude_api_key": claude_key,
+            "gpt_api_key": gpt_key,
+            "gemini_api_key": gemini_key,
+            "grok_api_key": grok_key,
+            "enabled_models": new_enabled,
+            "search_mode": search_mode,
+        })
+        st.session_state.show_setup = False
         st.rerun()
+
+
+# ===== チャット画面 =====
+def render_chat():
+    config = load_config()
+    enabled_models = config.get("enabled_models", ["claude"])
+    search_mode = config.get("search_mode", "fts")
+    api_keys = {
+        "claude": config["claude_api_key"],
+        "gpt":    config["gpt_api_key"],
+        "gemini": config["gemini_api_key"],
+        "grok":   config["grok_api_key"],
+    }
+
+    # ヘッダー
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.title("🔍 Xkaiseki")
+    with col2:
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            if st.button("タブ"):
+                st.session_state.view_mode = "tab"
+        with c2:
+            if st.button("並べて"):
+                st.session_state.view_mode = "grid"
+        with c3:
+            if st.button("⚙ 設定"):
+                st.session_state.show_setup = True
+                st.rerun()
+
+    # モデル選択チップ（複数選択）
+    st.write("**表示モデル:**")
+    display_models = list(st.session_state.get("display_models", enabled_models))
+    cols = st.columns(len(MODEL_NAMES))
+    new_display = []
+    for i, name in enumerate(MODEL_NAMES):
+        if name not in enabled_models:
+            continue
+        with cols[i]:
+            checked = st.checkbox(MODEL_LABELS[name], value=name in display_models, key=f"disp_{name}")
+            if checked:
+                new_display.append(name)
+    if new_display:
+        st.session_state.display_models = new_display
+    else:
+        st.session_state.display_models = enabled_models
+
+    st.divider()
+
+    # チャット履歴 + 回答表示
+    for i, turn in enumerate(st.session_state.history):
+        with st.chat_message("user"):
+            st.write(turn["question"])
+        with st.chat_message("assistant"):
+            _render_answers(turn["answers"], st.session_state.display_models, f"hist_{i}")
+
+    # 入力
+    question = st.chat_input("質問を入力...")
+    if question:
+        with st.chat_message("user"):
+            st.write(question)
+
+        with st.chat_message("assistant"):
+            with st.spinner("全モデルが回答中..."):
+                chunks = []
+                if DEFAULT_DB_PATH.exists():
+                    try:
+                        chunks = search(question, mode=search_mode)
+                    except Exception:
+                        pass
+
+                answers = dispatch(
+                    question=question,
+                    context_chunks=chunks,
+                    model_names=enabled_models,
+                    api_keys=api_keys,
+                    history=[
+                        msg
+                        for turn in st.session_state.history
+                        for msg in [
+                            {"role": "user", "content": turn["question"]},
+                            {"role": "assistant", "content": next(iter(turn["answers"].values()), "")},
+                        ]
+                    ],
+                )
+            _render_answers(answers, st.session_state.display_models, f"new_{len(st.session_state.history)}")
+
+        st.session_state.history.append({"question": question, "answers": answers})
+        if len(st.session_state.history) > 10:
+            st.session_state.history = st.session_state.history[-10:]
+        st.rerun()
+
+
+def _render_answers(answers: dict, display_models: list[str], key_prefix: str):
+    """タブ または 横並びで回答を表示する。"""
+    models_to_show = [m for m in display_models if m in answers]
+    if not models_to_show:
+        st.info("表示するモデルを選択してください。")
+        return
+
+    if st.session_state.view_mode == "tab":
+        tabs = st.tabs([MODEL_LABELS[m] for m in models_to_show])
+        for tab, name in zip(tabs, models_to_show):
+            with tab:
+                st.write(answers[name])
+    else:
+        cols = st.columns(len(models_to_show))
+        for col, name in zip(cols, models_to_show):
+            with col:
+                st.markdown(f"**{MODEL_LABELS[name]}**")
+                st.write(answers[name])
+
+
+# ===== メイン =====
+if st.session_state.show_setup:
+    render_setup()
+else:
+    render_chat()
