@@ -18,18 +18,34 @@ ANALYSIS_TOPICS = [
     "roadmap_10k_impressions"  # 1万インプレッションロードマップ
 ]
 
-ANALYSIS_PROMPT_TEMPLATE = """
-以下はXの推薦アルゴリズムのソースコードです。
-このコードを「{topic}」の観点で深く解析し、以下のJSON形式で回答してください。
+COMBINED_ANALYSIS_PROMPT_TEMPLATE = """
+以下は、Xの推薦アルゴリズムを構成する2つのリポジトリのソースコードです。
 
-## ソースコード
-{content}
+【重要な前提】
+- x-algorithm-main（2026年版）は the-algorithm-main（2025年版）を基盤として構築されています
+- 2026年版は2025年版の上位レイヤーとして動作し、一部コンポーネントを継承・拡張・置き換えています
+- 両者は独立したシステムではなく、統合されたアーキテクチャを形成しています
+
+## x-algorithm-main（2026年版 / 上位レイヤー）
+{x_algo_content}
+
+---
+
+## the-algorithm-main（2025年版 / 基盤レイヤー）
+{algo_content}
+
+---
+
+このコードを「{topic}」の観点で解析してください。以下の点を踏まえること：
+- 2026年版と2025年版がどのように連携・継承しているか
+- 2025年版から2026年版で何が変わり、何が引き継がれているか
+- アフィリエイト運用者にとって実践的な意味は何か
 
 ## 出力形式（必ずこのJSONのみを出力）
 {{
   "topic": "{topic}",
-  "summary": "200文字以内の要約",
-  "marketing_insights": ["アフィリエイト運用者向けの具体的アドバイス（3〜5個）"]
+  "summary": "200文字以内の要約（両バージョンの統合的な解析結果）",
+  "marketing_insights": ["アフィリエイト運用者向けの具体的アドバイス（5〜8個）"]
 }}
 """
 
@@ -69,15 +85,25 @@ def _read_key_files(repo_path: str, max_chars: int = MAX_CHARS) -> str:
     return "\n\n".join(collected)
 
 
-def analyze_repository(repo_path: str, api_key: str, topic: str) -> dict:
+def analyze_repositories_combined(x_algo_path: str, algo_path: str, api_key: str, topic: str) -> dict:
     """
-    リポジトリを読み込み、指定トピックについて Claude で解析し dict を返す。
+    両リポジトリを統合的に読み込み、レイヤード・アーキテクチャとして Claude で解析する。
+
+    x-algorithm-main（2026年版）が the-algorithm-main（2025年版）の上位レイヤーであるという
+    継承関係を踏まえた統合解析を行う。
 
     Returns:
         {"topic": str, "summary": str, "marketing_insights": list[str]}
     """
-    content = _read_key_files(repo_path)
-    prompt = ANALYSIS_PROMPT_TEMPLATE.format(topic=topic, content=content)
+    # 各リポジトリ30,000文字に制限（合計60,000文字でトークン上限内に収める）
+    x_algo_content = _read_key_files(x_algo_path, max_chars=30_000)
+    algo_content = _read_key_files(algo_path, max_chars=30_000)
+
+    prompt = COMBINED_ANALYSIS_PROMPT_TEMPLATE.format(
+        topic=topic,
+        x_algo_content=x_algo_content,
+        algo_content=algo_content,
+    )
 
     client = anthropic.Anthropic(api_key=api_key)
     response = client.messages.create(
