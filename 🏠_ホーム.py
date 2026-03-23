@@ -14,6 +14,20 @@ body { background: #0F172A; color: #F1F5F9; }
 .model-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px;
   border-radius: 8px; border: 2px solid #334155; cursor: pointer;
   font-size: 0.82rem; font-weight: 500; margin-right: 6px; }
+.stTabs [data-baseweb="tab-list"] { gap: 4px; }
+.stTabs [data-baseweb="tab"] {
+  flex: 1; color: white !important; font-size: 1.25rem !important;
+  font-weight: 800 !important; border-radius: 8px 8px 0 0 !important;
+  justify-content: center; padding: 12px 8px !important; transition: opacity 0.2s; }
+.stTabs [aria-selected="false"] { opacity: 0.4 !important; }
+.stTabs [aria-selected="true"]  { opacity: 1   !important; }
+.stTabs [data-baseweb="tab-highlight"] { display: none !important; }
+.stTabs [data-baseweb="tab-border"]    { display: none !important; }
+.ai-card-header { font-size: 1.25rem; font-weight: 800; padding: 10px 16px;
+  border-radius: 4px; margin-bottom: 8px; }
+/* 分割表示: コードブロックが列幅をはみ出ないよう制御 */
+[data-testid='stColumn'] pre { overflow-x: auto !important; }
+[data-testid='stColumn'] .stMarkdown { min-width: 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -35,6 +49,28 @@ if "active_tab" not in st.session_state:
     st.session_state.active_tab = "claude"
 if "last_answers" not in st.session_state:
     st.session_state.last_answers = {}
+if "is_answering" not in st.session_state:
+    st.session_state.is_answering = False
+if "pending_question" not in st.session_state:
+    st.session_state.pending_question = None
+
+
+# ===== APIキー形式チェック =====
+_KEY_PREFIXES = {
+    "claude": "sk-ant-",
+    "gpt": "sk-",
+    "gemini": "AIza",
+    "grok": "xai-",
+}
+
+def _key_status(key: str, model: str) -> tuple[str, str]:
+    """入力値の形式を即時チェック。(icon, message) を返す。"""
+    if not key:
+        return "", ""
+    prefix = _KEY_PREFIXES[model]
+    if key.startswith(prefix):
+        return "✅", f"形式OK（{prefix}...）"
+    return "❌", f"形式エラー — {prefix}... で始まるはずです"
 
 
 # ===== セットアップ画面 =====
@@ -54,10 +90,26 @@ def render_setup():
                 new_enabled.append(name)
 
     st.subheader("APIキー")
-    claude_key = st.text_input("Claude (Anthropic)", value=config.get("claude_api_key", ""), type="password")
-    gpt_key    = st.text_input("GPT (OpenAI)",       value=config.get("gpt_api_key", ""),    type="password")
-    gemini_key = st.text_input("Gemini (Google)",    value=config.get("gemini_api_key", ""), type="password")
-    grok_key   = st.text_input("Grok (xAI)",         value=config.get("grok_api_key", ""),   type="password")
+    entries = [
+        ("claude", "Claude (Anthropic)", "claude_api_key"),
+        ("gpt",    "GPT (OpenAI)",       "gpt_api_key"),
+        ("gemini", "Gemini (Google)",    "gemini_api_key"),
+        ("grok",   "Grok (xAI)",         "grok_api_key"),
+    ]
+    keys = {}
+    for model, label, cfg_key in entries:
+        val = st.text_input(label, value=config.get(cfg_key, ""), type="password", key=f"inp_{model}")
+        icon, msg = _key_status(val, model)
+        if icon == "✅":
+            st.success(f"{icon} {msg}", icon=None)
+        elif icon == "❌":
+            st.error(f"{icon} {msg}", icon=None)
+        keys[model] = val
+
+    claude_key = keys["claude"]
+    gpt_key    = keys["gpt"]
+    gemini_key = keys["gemini"]
+    grok_key   = keys["grok"]
 
     st.subheader("検索方式")
     search_mode = st.radio(
@@ -95,56 +147,29 @@ def render_chat():
         "gemini": config["gemini_api_key"],
         "grok":   config["grok_api_key"],
     }
+    is_answering = st.session_state.is_answering
 
-    # ヘッダー
-    col1, col2 = st.columns([3, 1])
-    with col1:
-        st.title("🔍 Xkaiseki")
-    with col2:
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            if st.button("タブ"):
-                st.session_state.view_mode = "tab"
-        with c2:
-            if st.button("並べて"):
-                st.session_state.view_mode = "grid"
-        with c3:
-            if st.button("⚙ 設定"):
-                st.session_state.show_setup = True
-                st.rerun()
+    # ヘッダー（タイトル → ボタン行の順）
+    st.title("🔍 Xソース解析チャット")
+    c1, c2, c3, _ = st.columns([1, 1, 1, 5])
+    with c1:
+        if st.button("タブ", disabled=is_answering):
+            st.session_state.view_mode = "tab"
+    with c2:
+        if st.button("分割表示", disabled=is_answering):
+            st.session_state.view_mode = "grid"
+    with c3:
+        if st.button("⚙ 設定", disabled=is_answering):
+            st.session_state.show_setup = True
+            st.rerun()
 
-    # モデル選択チップ（複数選択）
-    st.write("**表示モデル:**")
-    display_models = list(st.session_state.get("display_models", enabled_models))
-    cols = st.columns(len(MODEL_NAMES))
-    new_display = []
-    for i, name in enumerate(MODEL_NAMES):
-        if name not in enabled_models:
-            continue
-        with cols[i]:
-            checked = st.checkbox(MODEL_LABELS[name], value=name in display_models, key=f"disp_{name}")
-            if checked:
-                new_display.append(name)
-    if new_display:
-        st.session_state.display_models = new_display
-    else:
-        st.session_state.display_models = enabled_models
+    _render_interactive_area(enabled_models, is_answering)
 
-    st.divider()
-
-    # チャット履歴 + 回答表示
-    for i, turn in enumerate(st.session_state.history):
-        with st.chat_message("user"):
-            st.write(turn["question"])
-        with st.chat_message("assistant"):
-            _render_answers(turn["answers"], st.session_state.display_models, f"hist_{i}")
-
-    # 入力
-    question = st.chat_input("質問を入力...")
-    if question:
+    # 回答中: pending_question を処理
+    if is_answering and st.session_state.pending_question:
+        question = st.session_state.pending_question
         with st.chat_message("user"):
             st.write(question)
-
         with st.chat_message("assistant"):
             with st.spinner("全モデルが回答中..."):
                 chunks = []
@@ -153,7 +178,6 @@ def render_chat():
                         chunks = search(question, mode=search_mode)
                     except Exception:
                         pass
-
                 answers = dispatch(
                     question=question,
                     context_chunks=chunks,
@@ -168,11 +192,18 @@ def render_chat():
                         ]
                     ],
                 )
-            _render_answers(answers, st.session_state.display_models, f"new_{len(st.session_state.history)}")
-
         st.session_state.history.append({"question": question, "answers": answers})
         if len(st.session_state.history) > 10:
             st.session_state.history = st.session_state.history[-10:]
+        st.session_state.is_answering = False
+        st.session_state.pending_question = None
+        st.rerun()
+
+    # 入力（回答中は無効）
+    question = st.chat_input("質問を入力...", disabled=is_answering)
+    if question:
+        st.session_state.pending_question = question
+        st.session_state.is_answering = True
         st.rerun()
 
 
@@ -184,16 +215,73 @@ def _render_answers(answers: dict, display_models: list[str], key_prefix: str):
         return
 
     if st.session_state.view_mode == "tab":
+        # タブを各モデルカラーで塗る動的CSS（選択=不透明、非選択=半透明）
+        tab_css = "".join(
+            f"[data-baseweb='tab-list'] [data-baseweb='tab']:nth-child({i})"
+            f"{{ background: {MODEL_COLORS[name]} !important; color: white !important; }}"
+            for i, name in enumerate(models_to_show, 1)
+        )
+        st.markdown(f"<style>{tab_css}</style>", unsafe_allow_html=True)
         tabs = st.tabs([MODEL_LABELS[m] for m in models_to_show])
         for tab, name in zip(tabs, models_to_show):
             with tab:
-                st.write(answers[name])
+                st.markdown(answers[name])
     else:
+        # 分割表示: :has() で ai-card-header の data-model 属性を持つ列だけにスタイルを当てる
+        # （ヘッダーボタン行・チェックボックス行は data-model がないので影響ゼロ）
+        col_css = "".join(
+            f"[data-testid='stColumn']:has([data-model='{name}']) > div:first-child"
+            f"{{ border: 2px solid {MODEL_COLORS[name]} !important;"
+            f"border-radius: 10px !important;"
+            f"background: {MODEL_COLORS[name]}1A !important; }}"
+            for name in models_to_show
+        )
+        st.markdown(f"<style>{col_css}</style>", unsafe_allow_html=True)
         cols = st.columns(len(models_to_show))
         for col, name in zip(cols, models_to_show):
             with col:
-                st.markdown(f"**{MODEL_LABELS[name]}**")
-                st.write(answers[name])
+                color = MODEL_COLORS[name]
+                st.markdown(
+                    f'<div class="ai-card-header" data-model="{name}" style="background:{color}; color:#fff;">{MODEL_LABELS[name]}</div>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown(answers[name])
+
+
+@st.fragment
+def _render_interactive_area(enabled_models: list[str], is_answering: bool) -> None:
+    """モデル選択 + チャット履歴を fragment に包み、モデル切替時のページスクロールを防ぐ。"""
+    # モデル選択チップ
+    st.write("**表示モデル:**")
+    display_models = list(st.session_state.get("display_models", enabled_models))
+    cols = st.columns(len(MODEL_NAMES))
+    new_display = []
+    for i, name in enumerate(MODEL_NAMES):
+        if name not in enabled_models:
+            continue
+        with cols[i]:
+            checked = st.checkbox(
+                MODEL_LABELS[name],
+                value=name in display_models,
+                key=f"disp_{name}",
+                disabled=is_answering,
+            )
+            if checked:
+                new_display.append(name)
+    if new_display:
+        st.session_state.display_models = new_display
+    else:
+        st.session_state.display_models = list(enabled_models)
+
+    st.divider()
+
+    # チャット履歴
+    current_display = list(st.session_state.get("display_models", enabled_models))
+    for i, turn in enumerate(st.session_state.history):
+        with st.chat_message("user"):
+            st.write(turn["question"])
+        with st.chat_message("assistant"):
+            _render_answers(turn["answers"], current_display, f"hist_{i}")
 
 
 # ===== メイン =====
