@@ -35,7 +35,9 @@ class PersonaManager:
 
     def __init__(self, profile_path: Path = PERSONA_PATH):
         self._path = profile_path
-        self.profile: Optional[PersonaProfile] = self._load_profile()
+        # 自動読み込みなし: セッション間でプロフィールが混在するのを防ぐ。
+        # 保存済みデータを使いたい場合は load_profile_from_disk() を明示的に呼ぶ。
+        self.profile: Optional[PersonaProfile] = None
 
     # ── サンプル読み込み ──────────────────────────────────────────
 
@@ -158,7 +160,7 @@ class PersonaManager:
         )
         return response.content[0].text
 
-    # ── 保存 / 読み込み ────────────────────────────────────────────
+    # ── 保存 / 読み込み / 削除 ─────────────────────────────────────
 
     def _save_profile(self) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -166,6 +168,25 @@ class PersonaManager:
             json.dumps(asdict(self.profile), ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    def load_profile_from_disk(self) -> Optional[PersonaProfile]:
+        """ディスクから保存済みプロフィールを明示的に読み込む。
+
+        Returns:
+            読み込んだ PersonaProfile。ファイルがない・壊れている場合は None。
+        """
+        self.profile = self._load_profile()
+        return self.profile
+
+    def has_saved_profile(self) -> bool:
+        """ディスクに保存済みプロフィールが存在するか確認する。"""
+        return self._path.exists()
+
+    def delete_profile(self) -> None:
+        """プロフィールをメモリとディスクの両方から完全に削除する。"""
+        self.profile = None
+        if self._path.exists():
+            self._path.unlink()
 
     def _load_profile(self) -> Optional[PersonaProfile]:
         if not self._path.exists():

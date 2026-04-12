@@ -216,28 +216,91 @@ def test_rewrite_text_passes_system_prompt(tmp_path):
     assert "分身ペルソナ" in call_kwargs["system"]
 
 
-# ── save / load profile ───────────────────────────────────────────
+# ── save / load / delete profile ─────────────────────────────────
+
+def test_init_does_not_auto_load(tmp_path):
+    """__init__ はディスクを読まず、常に profile=None で開始する。"""
+    path = tmp_path / "persona.json"
+    # ファイルが存在していても init では読み込まない
+    manager_seed = PersonaManager(profile_path=path)
+    manager_seed.profile = SAMPLE_PROFILE
+    manager_seed._save_profile()
+
+    manager_new = PersonaManager(profile_path=path)
+    assert manager_new.profile is None
+
+
+def test_load_profile_from_disk_returns_profile(tmp_path):
+    """load_profile_from_disk() を明示的に呼んだときだけ読み込まれる。"""
+    path = tmp_path / "persona.json"
+    manager = PersonaManager(profile_path=path)
+    manager.profile = SAMPLE_PROFILE
+    manager._save_profile()
+    manager.profile = None  # リセット
+
+    loaded = manager.load_profile_from_disk()
+    assert loaded is not None
+    assert loaded.tone == SAMPLE_PROFILE.tone
+    assert manager.profile is loaded
+
+
+def test_load_profile_from_disk_returns_none_when_missing(tmp_path):
+    manager = PersonaManager(profile_path=tmp_path / "missing.json")
+    result = manager.load_profile_from_disk()
+    assert result is None
+    assert manager.profile is None
+
+
+def test_load_profile_from_disk_returns_none_on_corrupt_json(tmp_path):
+    path = tmp_path / "persona.json"
+    path.write_text("これはJSONではない", encoding="utf-8")
+    manager = PersonaManager(profile_path=path)
+    result = manager.load_profile_from_disk()
+    assert result is None
+    assert manager.profile is None
+
+
+def test_has_saved_profile(tmp_path):
+    path = tmp_path / "persona.json"
+    manager = PersonaManager(profile_path=path)
+    assert not manager.has_saved_profile()
+
+    manager.profile = SAMPLE_PROFILE
+    manager._save_profile()
+    assert manager.has_saved_profile()
+
+
+def test_delete_profile_clears_memory_and_disk(tmp_path):
+    """delete_profile() はメモリとディスクの両方を削除する。"""
+    path = tmp_path / "persona.json"
+    manager = PersonaManager(profile_path=path)
+    manager.profile = SAMPLE_PROFILE
+    manager._save_profile()
+    assert path.exists()
+
+    manager.delete_profile()
+    assert manager.profile is None
+    assert not path.exists()
+
+
+def test_delete_profile_no_error_when_no_file(tmp_path):
+    """ファイルがなくても delete_profile() はエラーにならない。"""
+    manager = PersonaManager(profile_path=tmp_path / "missing.json")
+    manager.profile = SAMPLE_PROFILE
+    manager.delete_profile()  # ファイルなしでも例外を出さない
+    assert manager.profile is None
+
 
 def test_save_and_reload_profile(tmp_path):
+    """_save_profile → load_profile_from_disk の往復テスト。"""
     path = tmp_path / "persona.json"
     manager = PersonaManager(profile_path=path)
     manager.profile = SAMPLE_PROFILE
     manager._save_profile()
 
     manager2 = PersonaManager(profile_path=path)
+    manager2.load_profile_from_disk()
     assert manager2.profile is not None
     assert manager2.profile.tone == SAMPLE_PROFILE.tone
     assert manager2.profile.vocabulary == SAMPLE_PROFILE.vocabulary
     assert manager2.profile.writing_quirks == SAMPLE_PROFILE.writing_quirks
-
-
-def test_load_profile_returns_none_when_missing(tmp_path):
-    manager = PersonaManager(profile_path=tmp_path / "missing.json")
-    assert manager.profile is None
-
-
-def test_load_profile_returns_none_on_corrupt_json(tmp_path):
-    path = tmp_path / "persona.json"
-    path.write_text("これはJSONではない", encoding="utf-8")
-    manager = PersonaManager(profile_path=path)
-    assert manager.profile is None
