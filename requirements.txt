@@ -5,3 +5,4 @@ google-generativeai>=0.8
 python-dotenv>=1.0
 pytest>=8.0
 pytest-mock>=3.0
+notebooklm-py[browser]>=0.3.4
