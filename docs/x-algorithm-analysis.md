@@ -63,9 +63,9 @@
 | 滞在せずスクロール (NotDwelled) | **-0.02** |
 
 ### スコア後の補正（適用順）
-1. **新規投稿者ブースト** (author_cold_start.rs): フォロワー≦1,000・表示回数<1,000・投稿24時間以内のオリジナル投稿から1リクエスト1件を15〜16位相当のスコアまで引き上げ
+1. **新規投稿者ブースト** (author_cold_start.rs): フォロワー≦1,000・表示回数<1,000・投稿24時間以内のオリジナル投稿から1リクエスト1件を15〜16位相当のスコアまで引き上げ（下限保証方式=既にそれ以上なら変化なし）。補足: 元スコアが上位85%以内（`LowImpressionsMaxPositionRatio=0.85`）の候補のみ対象。A/B実験（MoE Codivert）の枠組み内で運用されており、24時間鮮度条件はTreatmentアーム限定。`EnableViewerColdStart`デフォルトtrue、RankingScorerから無条件に呼ばれる
 2. **著者多様性減衰**: 同一著者のk番目(0始まり) → `(1-0.25)×0.5^k+0.25`倍。2件目0.625倍、3件目0.4375倍、下限0.25倍
-3. **フォロー外割引 (OON)**: ×**0.75**。フォロー中アカウントでも**リプライ・リポストには適用**（デフォルト有効）。トピック指定時は×0.5。新規ユーザー(フォロー5人未満)にはOON×0.00001
+3. **フォロー外割引 (OON)**: ×**0.75**。フォロー中アカウントでも**リプライ・リポストには適用**（デフォルト有効）。トピック指定時は×0.5。新規閲覧ユーザー向け`NEW_USER_OON_WEIGHT_FACTOR=0.00001`（条件: フォロー5人以上かつアカウント年齢<閾値）は存在するが、閾値`NewUserAgeThresholdSecs`のデフォルトが0のため**現行デフォルトでは発火しない**（実験用）
 4. **VMRanker (DPP)**: theta=0.65、上位150件プール内で埋め込み類似の投稿を間引き（同一内容はスコア最高の1件のみ生き残る）
 
 ### 双方向ブースト変遷 (docs/BIDIRECTIONAL_BOOST_CHANGE.md)
@@ -128,7 +128,7 @@
 | CSE(児童搾取)関連 | 即・永久凍結 | 永久 |
 
 - Agathaの比率スコア分母は**フォロー外からのいいねのみ**。1人の加害者のブロック/通報は最大100件までしかカウントされない
-- フォロワー25,000超 or PageRankスコア54以上は自動ラベリング対象外→人間レビューへ
+- 高PageRank判定アカウントは自動ラベリング対象外→人間レビューへ。判定ロジック（IsHighPageRankUser.df）: UserCredV2スコアの**データがある場合はPageRank基準のみ**（閾値`HighPageRankThreshold`の値はリポジトリ内に定義なし=非公開）、**データがない場合のみフォロワー数25,000超**のフォールバック基準を使用
 - BDSM検出対象: FollowBot、LikeBot、EngagementAmplifier、ReplySpamBot、TweetSpamBot、RTBot、MultiActionBot（発動閾値は非公開・センチネル値9.99に置換済み）
 - 執行はGrowthBook動的コンフィグが本番ソース（リポジトリはスナップショット）
 
@@ -152,7 +152,25 @@
 - **Under the Hood**: https://x.com/i/under_the_hood — 自分のアカウント/投稿のラベルの月次集計を確認可能（アカウント年齢365日以上・月10投稿以上・月末から10日後に公開）
 - 公開対象は投稿ラベル17種+アカウントラベル11種のホワイトリスト方式
 
-## 11. Thunder（フォロー中ソース）詳細
+## 11. フォロワー数で挙動が変わる全ポイント（2026-08-21 再スイープで確定）
+
+リポジトリ全体をフォロワー数関連で再グレップし、全サブREADME（実在するのは トップレベル / bdsm / phoenix / phoenix/reference の4件のみ。home-mixer等のサブREADMEは存在しない）を精読した結果。
+
+| 閾値 | 対象 | 挙動 | 出典 |
+|---|---|---|---|
+| **≦100人** | 投稿者 | SimClustersの**プロデューサー埋め込み対象外**（`minNumFollowersForProducer=100`・`minNumFaversForProducer=100`。フォロワー数>100が必要）。この経路での発見可能性が構造的に低い | simclusters/.../ProducerEmbeddingsFromInterestedIn.scala:473 |
+| **<1,000人** | 投稿者 | **tail専用インデックス**にいいね0でも24時間掲載（ロングテール救済。`TAIL_MAX_AUTHOR_FOLLOWERS=1000`、`followers >= 1000`で除外） | phoenix-rankall/src/processor/sid_tail_processor.rs |
+| **≦1,000人** | 投稿者 | **新規投稿者ブースト**対象（§2参照） | home-mixer/scorers/author_cold_start.rs |
+| **<1,000人** | スレッド主 | ルート著者のフォロワー<1,000のスレッドは**協調スパム検知の対象外**（"low_blast_radius"） | grox/flows/reply_spam/task_filter.py:97 |
+| **≦60,000人** | 会話の親/ルート著者 | リプライの**スパム検知スコアリング対象**。**60,000超では代わりにLLM返信ランキング**（重要な返信の並べ替え）が働く（`FOLLOWER_COUNT_THRESHOLD_FOR_SPAM_DETECTION/REPLY_RANKING = 60000`） | grox/flows/reply_spam/task_filter.py:17,185 |
+| **>25,000人** | 投稿者 | 自動ラベリング免除のフォールバック基準（PageRankデータがない場合のみ。§7参照） | botmaker-rules/.../IsHighPageRankUser.df |
+| **≧10,000人** | **閲覧者** | 動画品質視聴（VQV）重みが強制0（大規模アカウントの視聴は動画スコアに寄与しない。引用内動画のquoted_vqv_weightにはこの制限なし） | home-mixer/util/candidates_util.rs:4 |
+| **100,000人** | 投稿者 | Grox LLMプロンプト上の「大規模アカウント」定義（`large_account_follower_threshold`） | grox/flows/reply_spam/prompts.py |
+| （非公開） | 投稿者 | abuse-enforcement-serviceの高フォロワー執行免除。リポジトリ上の`follower_count >= 12.34`は「ゲーミング対策のモック値」と明記、本番閾値は非公開 | abuse-enforcement-service/.../enforcement_user.yaml:18 |
+| （非公開） | 投稿者 | BDSM（ボット検知）には「これ未満ではスコアリング自体が発火しないアカウント規模フロア」（min-actionsゲート）が存在、値はセンチネル999999に置換済み | bdsm/README.md:104-115 |
+| 集計区分 | — | Under the Hood内部のフォロワー階層: `<1K` / `1K-10K` / `10K-100K` / `≧100K` | under-the-hood/scalding/UnderTheHoodCommon.scala:51 |
+
+## 12. Thunder（フォロー中ソース）詳細
 
 - 投稿保持期間: **2日**（172,800秒）。返却は新着順のみ（スコアリングなし）
 - 1著者あたり上限: オリジナル50件/リプライ30件/動画100件
