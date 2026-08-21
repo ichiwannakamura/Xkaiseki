@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>𝕏アルゴリズムのトリセツ</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=M+PLUS+1+Code:wght@500;700&display=swap">
+<style>
+:root {
+  --bg: #F7F7F4;
+  --surface: #FFFFFF;
+  --surface2: #F1F0EA;
+  --ink: #20242B;
+  --muted: #6B7280;
+  --line: #E4E3DC;
+  --accent: #B97E0B;
+  --accent-soft: #F5EBD3;
+  --good: #25835A;
+  --good-soft: #E4F2EA;
+  --bad: #C0453E;
+  --bad-soft: #F9E9E7;
+  --info-soft: #EDF0F5;
+  --code-bg: #EFEEE8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14161A;
+    --surface: #1D2026;
+    --surface2: #23262D;
+    --ink: #EAE8E2;
+    --muted: #9AA1AC;
+    --line: #2D3138;
+    --accent: #E0A64B;
+    --accent-soft: #33301F;
+    --good: #4EC28F;
+    --good-soft: #1C2E26;
+    --bad: #E5695F;
+    --bad-soft: #342022;
+    --info-soft: #22262E;
+    --code-bg: #262A31;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14161A;
+  --surface: #1D2026;
+  --surface2: #23262D;
+  --ink: #EAE8E2;
+  --muted: #9AA1AC;
+  --line: #2D3138;
+  --accent: #E0A64B;
+  --accent-soft: #33301F;
+  --good: #4EC28F;
+  --good-soft: #1C2E26;
+  --bad: #E5695F;
+  --bad-soft: #342022;
+  --info-soft: #22262E;
+  --code-bg: #262A31;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  font-size: 16px;
+  line-height: 1.9;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 880px; margin: 0 auto; padding: 0 20px 96px; }
+h1, h2, h3 { font-family: "Zen Maru Gothic", "Hiragino Sans", sans-serif; text-wrap: balance; }
+.num, .val { font-family: "M PLUS 1 Code", monospace; font-variant-numeric: tabular-nums; }
+
+/* ---------- hero ---------- */
+.hero { padding: 72px 0 40px; }
+.hero .kicker {
+  display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: .14em;
+  color: var(--accent); border: 1px solid var(--accent); border-radius: 999px;
+  padding: 2px 14px; margin-bottom: 20px;
+}
+.hero h1 { font-size: clamp(34px, 6vw, 52px); font-weight: 900; line-height: 1.3; }
+.hero .lede { margin-top: 16px; font-size: 17px; color: var(--muted); max-width: 40em; }
+.summary {
+  margin-top: 32px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 14px; padding: 24px 26px;
+}
+.summary h2 { font-size: 15px; letter-spacing: .1em; color: var(--accent); margin-bottom: 12px; }
+.summary ol { list-style: none; counter-reset: s; }
+.summary li { counter-increment: s; display: flex; gap: 14px; padding: 8px 0; align-items: baseline; }
+.summary li::before {
+  content: counter(s); font-family: "M PLUS 1 Code", monospace; font-weight: 700;
+  color: var(--accent); flex: 0 0 auto; font-size: 20px;
+}
+.summary li strong { font-weight: 700; }
+
+/* ---------- TOC ---------- */
+.toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 28px 0 0; }
+.toc a {
+  font-size: 13px; font-weight: 500; text-decoration: none; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+  padding: 5px 14px;
+}
+.toc a:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ---------- sections ---------- */
+section { margin-top: 72px; }
+.eyebrow {
+  font-size: 12px; font-weight: 700; letter-spacing: .22em; color: var(--accent);
+  margin-bottom: 8px;
+}
+section > h2 { font-size: clamp(24px, 4vw, 32px); font-weight: 900; margin-bottom: 8px; }
+section > .intro { color: var(--muted); max-width: 42em; margin-bottom: 28px; }
+h3 { font-size: 19px; font-weight: 700; margin: 36px 0 12px; }
+p + p { margin-top: 12px; }
+section p { max-width: 42em; }
+em { font-style: normal; font-weight: 700; background: linear-gradient(transparent 68%, var(--accent-soft) 68%); }
+
+/* たとえ話ふきだし */
+.tatoe {
+  display: flex; gap: 14px; margin: 20px 0; padding: 16px 18px;
+  background: var(--info-soft); border-radius: 12px; max-width: 46em;
+}
+.tatoe .face {
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--surface); border: 1px solid var(--line);
+  display: grid; place-items: center; font-size: 20px;
+}
+.tatoe .talk { font-size: 15px; }
+.tatoe .talk b { display: block; font-size: 12px; letter-spacing: .12em; color: var(--muted); margin-bottom: 2px; }
+
+/* ---------- flow diagram ---------- */
+.flow { margin: 28px 0 8px; }
+.fstep {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 18px; display: flex; gap: 16px; align-items: baseline;
+}
+.fstep .no {
+  font-family: "M PLUS 1 Code", monospace; font-weight: 700; font-size: 14px;
+  color: var(--accent); flex: 0 0 2.2em;
+}
+.fstep .what { font-weight: 700; }
+.fstep .how { color: var(--muted); font-size: 14px; }
+.farrow { text-align: center; color: var(--muted); font-size: 14px; line-height: 1.6; padding: 4px 0; }
+.fnote { font-size: 13px; color: var(--muted); margin-top: 10px; }
+
+/* ---------- score bars ---------- */
+.chart { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px 24px; margin-top: 20px; }
+.chart h3 { margin: 0 0 4px; font-size: 16px; }
+.chart .sub { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+.bars { display: grid; grid-template-columns: 11em 1fr 4.5em; gap: 8px 12px; align-items: center; }
+.bars .lbl { font-size: 14px; font-weight: 500; text-align: right; line-height: 1.4; }
+.bars .lbl small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
+.bars .track { background: var(--surface2); border-radius: 5px; height: 18px; overflow: hidden; }
+.bars .fill { height: 100%; border-radius: 5px; min-width: 4px; }
+.bars .fill.g { background: var(--good); }
+.bars .fill.g.hl { background: var(--accent); }
+.bars .fill.r { background: var(--bad); }
+.bars .val { font-size: 13px; font-weight: 700; }
+.bars .val.g { color: var(--good); }
+.bars .val.g.hl { color: var(--accent); }
+.bars .val.r { color: var(--bad); }
+.chart .foot { font-size: 12px; color: var(--muted); margin-top: 14px; }
+.warnbox {
+  margin-top: 20px; padding: 16px 18px; border: 1px solid var(--line);
+  border-radius: 12px; background: var(--surface); max-width: 46em;
+}
+.warnbox b { color: var(--bad); }
+.warnbox p { font-size: 14px; }
+
+/* ---------- adjustment cards ---------- */
+.adjust { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 16px; }
+.adjust .a {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px;
+}
+.adjust .a h4 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+.adjust .a p { font-size: 13.5px; color: var(--muted); line-height: 1.7; }
+.adjust .a .num { color: var(--accent); font-weight: 700; }
+
+/* ---------- time rules ---------- */
+.timeline { margin-top: 20px; display: grid; gap: 10px; }
+.trow {
+  display: flex; gap: 16px; align-items: baseline; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 12px; padding: 13px 18px;
+}
+.trow .t {
+  font-family: "M PLUS 1 Code", monospace; font-weight: 700; color: var(--accent);
+  flex: 0 0 7.5em; font-size: 15px;
+}
+.trow .d { font-size: 14.5px; }
+.trow .d b { font-weight: 700; }
+
+/* ---------- do / don't cards ---------- */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-top: 20px; }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 18px 20px;
+}
+.card .badge {
+  display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%;
+  font-weight: 900; font-size: 16px; margin-bottom: 10px;
+}
+.card.do .badge { background: var(--good-soft); color: var(--good); }
+.card.dont .badge { background: var(--bad-soft); color: var(--bad); }
+.card h4 { font-family: "Zen Maru Gothic", sans-serif; font-size: 16.5px; font-weight: 700; margin-bottom: 6px; }
+.card p { font-size: 14px; color: var(--muted); line-height: 1.8; }
+.card p b { color: var(--ink); }
+.card .why { display: block; margin-top: 10px; font-size: 12px; color: var(--accent); }
+
+/* ---------- tables ---------- */
+.tablewrap { overflow-x: auto; margin-top: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 14px; }
+th, td { text-align: left; padding: 12px 16px; border-top: 1px solid var(--line); vertical-align: top; }
+thead th { border-top: none; font-size: 12.5px; letter-spacing: .06em; color: var(--muted); background: var(--surface2); }
+td code, p code, li code {
+  font-family: "M PLUS 1 Code", monospace; font-size: 12.5px;
+  background: var(--code-bg); border-radius: 5px; padding: 1px 6px; white-space: nowrap;
+}
+.lv { font-weight: 700; white-space: nowrap; }
+.lv.l1 { color: var(--bad); }
+.lv.l2 { color: var(--accent); }
+.lv.l3 { color: var(--muted); }
+
+/* ---------- checklist ---------- */
+.check { margin-top: 20px; display: grid; gap: 8px; }
+.check label {
+  display: flex; gap: 14px; align-items: baseline; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; cursor: pointer;
+}
+.check input { accent-color: var(--good); transform: translateY(2px) scale(1.15); }
+.check .c-main { font-weight: 500; font-size: 15px; }
+.check .c-sub { display: block; font-size: 12.5px; color: var(--muted); }
+
+/* ---------- footer ---------- */
+.sources { margin-top: 88px; border-top: 1px solid var(--line); padding-top: 28px; }
+.sources h2 { font-size: 16px; margin-bottom: 12px; }
+.sources p, .sources li { font-size: 13px; color: var(--muted); }
+.sources ul { margin: 10px 0 0 1.2em; }
+.sources a { color: var(--accent); }
+
+a { color: var(--accent); }
+@media (max-width: 560px) {
+  .bars { grid-template-columns: 8em 1fr 4em; }
+  .trow .t { flex-basis: 6em; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bars .fill { transition: width .6s ease; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ================= HERO ================= -->
+<header class="hero">
+  <span class="kicker">2026年8月公開ソースコード解析版</span>
+  <h1>𝕏アルゴリズムの<br>トリセツ</h1>
+  <p class="lede">𝕏（旧Twitter）が公開した「おすすめ」フィードの本物のプログラム（xai-org/x-algorithm・全2,024ファイル）を全部読んで、だいじなことだけを、やさしい言葉でまとめました。</p>
+
+  <div class="summary">
+    <h2>さきに3行まとめ</h2>
+    <ol>
+      <li><span>おすすめ欄は<strong>毎回ひらくたびのオーディション</strong>。AIが「この人はこの投稿に何をしそうか」を予想して点数をつけ、上位35件だけが合格します。</span></li>
+      <li><span>点数がいちばん高いのは<strong>「共有したくなる」「返事したくなる」投稿</strong>。逆に、通報・ミュートされそうな投稿は大きくマイナスされます。</span></li>
+      <li><span>点数とは別に<strong>「見せていいかチェック」</strong>があり、スパムなどの注意シール（ラベル）が付くと、点数がいくら高くてもおすすめに出ません。</span></li>
+    </ol>
+  </div>
+
+  <nav class="toc">
+    <a href="#shikumi">① 全体のしくみ</a>
+    <a href="#tensu">② 点数表</a>
+    <a href="#kakusan">③ 拡散のしくみ</a>
+    <a href="#do">④ やるべきこと</a>
+    <a href="#dont">⑤ やってはいけないこと</a>
+    <a href="#shadow">⑥ シャドウバンの正体</a>
+    <a href="#checklist">⑦ 今日からのチェックリスト</a>
+  </nav>
+</header>
+
+<!-- ================= 1. しくみ ================= -->
+<section id="shikumi">
+  <p class="eyebrow">だい1しょう ── しくみ</p>
+  <h2>おすすめ欄は「オーディション」</h2>
+  <p class="intro">誰かが𝕏のアプリを開くたびに、その人だけのオーディションが一瞬で行われます。あなたの投稿は、毎回このオーディションを受けています。</p>
+
+  <div class="flow">
+    <div class="fstep"><span class="no">1</span><div><span class="what">候補あつめ</span><br><span class="how">フォロー中の最新投稿（最大1,200件）と、フォロー外からAIが探した投稿（最大約1,800件）を集める</span></div></div>
+    <div class="farrow">↓</div>
+    <div class="fstep"><span class="no">2</span><div><span class="what">ふるい落とし（17種類のフィルター）</span><br><span class="how">古い投稿（48時間超え）・もう見た投稿・ブロックやミュートした人の投稿などをここで除外</span></div></div>
+    <div class="farrow">↓</div>
+    <div class="fstep"><span class="no">3</span><div><span class="what">AIが点数づけ</span><br><span class="how">「Phoenix」というAIが、見る人の直近の行動（最大1,022件）から「いいねしそう」「返信しそう」「通報しそう」…を投稿ごとに予想</span></div></div>
+    <div class="farrow">↓</div>
+    <div class="fstep"><span class="no">4</span><div><span class="what">上位50件に絞る</span><br><span class="how">予想×点数表（次の章）の合計点が高い順</span></div></div>
+    <div class="farrow">↓</div>
+    <div class="fstep"><span class="no">5</span><div><span class="what">見せていいかチェック（可視性フィルタリング）</span><br><span class="how">スパム・NSFWなどの「注意シール」が付いた投稿をここで落とす／ぼかす。同じスレッドからは1件だけ残す</span></div></div>
+    <div class="farrow">↓</div>
+    <div class="fstep"><span class="no">6</span><div><span class="what">合格は35件</span><br><span class="how">広告・「おすすめユーザー」（6番目の位置）を混ぜて画面に表示</span></div></div>
+  </div>
+  <p class="fnote">数値の出どころ: <code>TOP_K_CANDIDATES_TO_SELECT = 50</code>、<code>RESULT_SIZE = 35</code>、<code>MAX_POST_AGE = 48時間</code>（home-mixer/params/config.rs）</p>
+
+  <div class="tatoe">
+    <div class="face">🎪</div>
+    <div class="talk"><b>たとえるなら</b>のど自慢大会。出場者（投稿）は数千人。予選（フィルター）→審査員の採点（AI）→本選50人→持ち物検査（安全チェック）→テレビに映るのは35人だけ。しかも大会は<em>見る人ごと・開くたびに毎回開催</em>されます。</div>
+  </div>
+
+  <h3>だいじなポイント：審査員は「その人専用」</h3>
+  <p>点数をつけるAIは、世界共通の「良い投稿ランキング」を持っていません。<em>見る人ひとりひとりの過去の行動</em>（何にいいねしたか、何を素通りしたか）を見て、「この人なら」の予想をします。だから同じ投稿でも、人によって点数はぜんぜん違います。</p>
+  <p>また、投稿の文章はそのまま読まれるのではなく、「意味の住所」（セマンティックID）という数字に変換されます。<em>意味が似ている投稿は、住所も近くなる</em>——これが後で出てくる「同じような投稿は間引かれる」しくみにつながります。</p>
+</section>
+
+<!-- ================= 2. 点数表 ================= -->
+<section id="tensu">
+  <p class="eyebrow">だい2しょう ── てんすう</p>
+  <h2>行動ごとの点数表（本物の数値）</h2>
+  <p class="intro">ソースコード（home-mixer/params/param.rs）に書いてある本物の重みです。AIの予想確率にこの点数を掛けて、ぜんぶ足したものが投稿のスコアになります。</p>
+
+  <div class="chart">
+    <h3>プラスの行動 <span class="val" style="color:var(--good)">+</span></h3>
+    <p class="sub">見る人がこれを「しそう」だと予想されるほど、スコアが上がる</p>
+    <div class="bars">
+      <span class="lbl">リンクをコピーして共有</span><div class="track"><div class="fill g" style="width:100%"></div></div><span class="val g">+20.0</span>
+      <span class="lbl">返信<small>相互フォローの相手なら</small></span><div class="track"><div class="fill g hl" style="width:100%"></div></div><span class="val g hl">+20.0</span>
+      <span class="lbl">返信<small>ふつう</small></span><div class="track"><div class="fill g" style="width:50%"></div></div><span class="val g">+5.0</span>
+      <span class="lbl">引用ポスト</span><div class="track"><div class="fill g" style="width:50%"></div></div><span class="val g">+5.0</span>
+      <span class="lbl">DMで共有</span><div class="track"><div class="fill g" style="width:50%"></div></div><span class="val g">+5.0</span>
+      <span class="lbl">投稿者をフォロー</span><div class="track"><div class="fill g" style="width:45%"></div></div><span class="val g">+4.0</span>
+      <span class="lbl">共有ボタンを押す</span><div class="track"><div class="fill g" style="width:32%"></div></div><span class="val g">+2.0</span>
+      <span class="lbl">リポスト</span><div class="track"><div class="fill g" style="width:22%"></div></div><span class="val g">+1.0</span>
+      <span class="lbl">いいね</span><div class="track"><div class="fill g" style="width:16%"></div></div><span class="val g">+0.5</span>
+      <span class="lbl">投稿をクリック</span><div class="track"><div class="fill g" style="width:14%"></div></div><span class="val g">+0.4</span>
+      <span class="lbl">リンクを開く</span><div class="track"><div class="fill g" style="width:10%"></div></div><span class="val g">+0.2</span>
+      <span class="lbl">写真拡大・動画再生</span><div class="track"><div class="fill g" style="width:5%"></div></div><span class="val g">+0.05</span>
+      <span class="lbl">じっくり読む<small>滞在時間1秒ごと</small></span><div class="track"><div class="fill g" style="width:4%"></div></div><span class="val g">+0.004</span>
+    </div>
+    <p class="foot">棒の長さは比べやすいように調整しています（面積は正確な比率ではありません）。数値が本物です。</p>
+  </div>
+
+  <div class="chart">
+    <h3>マイナスの行動 <span class="val" style="color:var(--bad)">−</span></h3>
+    <p class="sub">見る人がこれを「しそう」だと予想されるほど、スコアが下がる</p>
+    <div class="bars">
+      <span class="lbl">通報</span><div class="track"><div class="fill r" style="width:100%"></div></div><span class="val r">−234.0</span>
+      <span class="lbl">ミュート</span><div class="track"><div class="fill r" style="width:50%"></div></div><span class="val r">−58.8</span>
+      <span class="lbl">「興味なし」を押す</span><div class="track"><div class="fill r" style="width:43%"></div></div><span class="val r">−43.2</span>
+      <span class="lbl">ブロック</span><div class="track"><div class="fill r" style="width:37%"></div></div><span class="val r">−31.2</span>
+      <span class="lbl">見ずに素通り</span><div class="track"><div class="fill r" style="width:3%"></div></div><span class="val r">−0.02</span>
+    </div>
+  </div>
+
+  <div class="warnbox">
+    <p><b>よくある誤解に注意！</b>　「通報1回＝いいね468個ぶん消える」ではありません。点数が掛かるのは<em>件数ではなく、AIの予想確率</em>です。通報は元々めったに起きない（いいねの1000分の1以下）ので、予想に影響力を持たせるために数字が大きいだけ——とソースコードのコメントに明記されています。同じ理由で、アンチが束になって通報しても、その影響は主に「そのアンチと似た人たち」のおすすめにしか及びません。さらに、タイムライン外（URL直接アクセスなど）からの操作はランキングに影響しません。</p>
+  </div>
+
+  <div class="tatoe">
+    <div class="face">🧮</div>
+    <div class="talk"><b>たとえるなら</b>持ち帰って友だちに見せたくなるプリント（共有）は20点、声をかけたくなる作品（返信）は5点、なんとなくの拍手（いいね）は0.5点。そして先生に苦情がいきそうな作品（通報）は−234点。<em>拍手の数より「共有・会話・苦情ゼロ」</em>が勝負です。</div>
+  </div>
+
+  <h3>合計点のあとに、3つの補正が入る</h3>
+  <div class="adjust">
+    <div class="a"><h4>新人ブースト</h4><p>フォロワー<span class="num">1,000人以下</span>・表示<span class="num">1,000回未満</span>・投稿から<span class="num">24時間以内</span>のオリジナル投稿を、1画面につき1件、<span class="num">16位</span>相当まで引き上げ。小さいアカウントへの「チャンス枠」。</p></div>
+    <div class="a"><h4>連投は減点</h4><p>同じ画面に同じ人の投稿が並ぶと、2件目は<span class="num">0.625倍</span>、3件目は<span class="num">0.44倍</span>…と下がる（下限0.25倍）。</p></div>
+    <div class="a"><h4>フォロー外は0.75倍</h4><p>フォローされていない人への表示は<span class="num">×0.75</span>。実は<em>フォロー中でも、リプライとリポストは同じく0.75倍</em>扱い。</p></div>
+  </div>
+  <p style="margin-top:16px">最後に「多様性チェック（DPP）」が働き、<em>意味がそっくりな投稿はいちばん点数が高い1件だけ</em>が画面に残ります。</p>
+</section>
+
+<!-- ================= 3. 拡散 ================= -->
+<section id="kakusan">
+  <p class="eyebrow">だい3しょう ── かくさん</p>
+  <h2>フォロワーの外へ届く条件</h2>
+  <p class="intro">フォロワー以外に届くには、AIの「探しものリスト」（検索インデックス）に載る必要があります。載るための条件と時間制限が、コードにはっきり書いてありました。</p>
+
+  <div class="timeline">
+    <div class="trow"><span class="t">投稿直後</span><span class="d"><b>いいね0でも24時間だけ</b>「新着リスト」に載る。ここが最初のチャンス</span></div>
+    <div class="trow"><span class="t">いいね1個</span><span class="d">本リストに登録される。ただし<b>投稿から49時間過ぎるといいねが来ても登録されない</b></span></div>
+    <div class="trow"><span class="t">いいね8個</span><span class="d"><b>コミュニティ拡散（SimClusters）の入場券</b>。8個未満の投稿は拡散候補にならない</span></div>
+    <div class="trow"><span class="t">いいね32個</span><span class="d">「高品質バケット」に昇格して、さらに見つけてもらいやすくなる</span></div>
+    <div class="trow"><span class="t">8時間ごと</span><span class="d">コミュニティ内の勢いスコアは<b>8時間で半分に減る</b>。バズは瞬発力の勝負</span></div>
+    <div class="trow"><span class="t">48時間</span><span class="d">おすすめ対象から<b>完全に外れる</b>（投稿の賞味期限は2日）</span></div>
+    <div class="trow"><span class="t">例外：動画</span><span class="d"><b>10秒より長い動画</b>だけは専用リストで<b>最長30日</b>（優良認定なら数年）残り続ける</span></div>
+  </div>
+
+  <div class="tatoe">
+    <div class="face">🍧</div>
+    <div class="talk"><b>たとえるなら</b>投稿はかき氷。作りたて（最初の数時間）に食べてもらえないとどんどん溶けて（8時間で半分）、2日で完全に溶けます。でも動画だけはアイスキャンディー。冷凍庫（動画専用リスト）で1か月もちます。</div>
+  </div>
+
+  <h3>「誰に」広がるかは、いいねした人で決まる</h3>
+  <p>𝕏は全ユーザーを約14.5万個の「クラブ」（興味のコミュニティ）に分けています。あなたの投稿にいいねした人が「料理クラブ」の人ばかりなら、投稿は料理クラブの他のメンバーにおすすめされます。ここで大事なのは、<em>いいねの合計数より「同じクラブの中でどれだけ集中して刺さったか」</em>が効く仕組みだということ。100個の薄いいいねより、ひとつの界隈からの30個のほうが拡散します。</p>
+
+  <h3>リプライとリポストは「拡散」しない</h3>
+  <p>検索インデックスには<em>オリジナル投稿と引用ポストしか載りません</em>。リプライ・リポストはフォロワーの外に配信されない上に、フォロワー内でも0.75倍扱い。<em>広めたい内容は、必ず自分のオリジナル投稿（または引用）として出す</em>のが鉄則です。</p>
+
+  <h3>フォロワー数で変わる「専用ルール」がある</h3>
+  <p>コードには、アカウントの大きさによって扱いが変わるルールがはっきり書かれています。特に<em>小さいアカウントには救済ルートが2本</em>用意されています。</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>あなたのフォロワー数</th><th>何が変わる？</th></tr></thead>
+      <tbody>
+        <tr><td class="lv l2">100人以下</td><td>コミュニティ拡散の「発信者名簿」（プロデューサー埋め込み）にまだ載れない。拡散は投稿ごとの<b>いいね8個</b>だけが頼り。<b>まず100人超えが最初の壁</b></td></tr>
+        <tr><td class="lv l2">1,000人未満</td><td><b>救済ルート①「tail専用リスト」</b>：いいね0個でも、投稿から24時間はフォロー外の人への発見候補に載せてもらえる</td></tr>
+        <tr><td class="lv l2">1,000人以下</td><td><b>救済ルート②「新人ブースト」</b>：表示1,000回未満・24時間以内のオリジナル投稿が、1画面につき1件、16位相当まで引き上げられる（実験運用中）</td></tr>
+        <tr><td class="lv l3">25,000人超</td><td>自動スパムラベルの対象から外れ、人間のレビューに回される目安（信用スコアのデータがない場合の基準）</td></tr>
+        <tr><td class="lv l3">60,000人が境界</td><td>あなたの投稿のリプ欄の扱いが変わる：<b>60,000人以下ならスパム検知の監視対象</b>、60,000人を超えるとAI（LLM）が「大事な返信」を上に並べ替えるモードに切り替わる</td></tr>
+        <tr><td class="lv l3">100,000人以上</td><td>システム内部で正式に「大規模アカウント」と定義される</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="fnote">おまけ: 「見る側」のフォロワーが1万人以上だと、その人の動画視聴は動画スコアにカウントされません（インフルエンサーの視聴で動画スコアは動かせない設計）。</p>
+
+  <div class="tatoe">
+    <div class="face">🐣</div>
+    <div class="talk"><b>たとえるなら</b>小さいアカウントは「新人選手」。試合（おすすめ）には新人専用の出場枠が2つあり、実績ゼロでも出してもらえます。だから<em>フォロワーが少ない今は不利ではなく、むしろ特別扱いの期間</em>。この枠がある間に「いいね8個を確実にくれる濃いファン」を作るのが正解です。</div>
+  </div>
+</section>
+
+<!-- ================= 4. DO ================= -->
+<section id="do">
+  <p class="eyebrow">だい4しょう ── やるべきこと</p>
+  <h2>点が伸びる行動 10か条</h2>
+  <p class="intro">ここまでの仕組みから逆算した「アルゴリズムが応援してくれる動き方」です。</p>
+
+  <div class="cards">
+    <div class="card do"><span class="badge">✓</span><h4>1. 「共有したくなる」を最優先で作る</h4><p>リンクコピー共有は<b>+20点</b>で全行動トップ。「あとで見返したい」「あの人に送りたい」と思われる実用情報・まとめ・保存版が最強。</p><span class="why">根拠: ShareViaCopyLinkWeight = 20.0</span></div>
+    <div class="card do"><span class="badge">✓</span><h4>2. 会話が生まれる投稿にする</h4><p>返信は<b>+5点</b>（いいねの10倍）。質問で終わる、意見が分かれる、答えたくなる——読んだ人が「ひとこと言いたくなる」形に。</p><span class="why">根拠: ReplyWeight = 5.0</span></div>
+    <div class="card do"><span class="badge">✓</span><h4>3. 相互フォローの仲間を大切にする</h4><p>相互フォローの相手には返信予測が<b>+15点上乗せ（実質20点）</b>。本物の仲間との日常的な会話が、そのままスコアの土台になる。</p><span class="why">根拠: BidirectionalFollowReplyWeightBoost = 15.0（2026年7月導入）</span></div>
+    <div class="card do"><span class="badge">✓</span><h4>4. もらった返信には全部返す</h4><p>会話が続くほど相手の「最近の行動リスト」にあなたが登場し、AIがあなたの投稿を出しやすくなる。特に投稿直後の1時間はリプライ対応を最優先。</p><span class="why">根拠: 行動履歴(最大1,022件)がAIの主入力</span></div>
+    <div class="card do"><span class="badge">✓</span><h4>5. 投稿はフォロワーが起きている時間に</h4><p>勝負は最初の数時間（勢いは8時間で半減、49時間で登録打ち切り）。フォロワーがすぐ反応できる時間帯に出す。</p><span class="why">根拠: HalfLife = 8時間 / maxTweetAge = 49時間</span></div>
+    <div class="card do"><span class="badge">✓</span><h4>6. まず「身内のいいね8個」を確実に</h4><p>フォロワー外への拡散は<b>いいね8個から</b>。薄く広くより、確実に反応してくれる濃いファンを育てるのが近道。</p><span class="why">根拠: MinFavoriteCount = 8</span></div>
+    <div class="card do"><span class="badge">✓</span><h4>7. 広めたい内容はオリジナル投稿で</h4><p>リプライ・リポストは拡散インデックスに載らない。他人の投稿に乗りたいときは<b>引用ポスト</b>を使う（引用は載る）。</p><span class="why">根拠: phoenix-rankallの適格条件</span></div>
+    <div class="card do"><span class="badge">✓</span><h4>8. 10秒より長い動画を混ぜる</h4><p>長め動画だけが持つ「30日リスト」で、テキストの15倍長く見つけてもらえる。ただしリプライに付けた動画は対象外。</p><span class="why">根拠: videoインデックス 48h〜720h</span></div>
+    <div class="card do"><span class="badge">✓</span><h4>9. 連投は間隔をあけ、内容を変える</h4><p>同じ画面に自分の投稿が並ぶと2件目から減点。意味がそっくりな投稿は1件に間引かれる。1テーマ1投稿、時間を空けて。</p><span class="why">根拠: AuthorDiversityDecay = 0.5 / DPP</span></div>
+    <div class="card do"><span class="badge">✓</span><h4>10. 小さいうちこそ丁寧に運用する</h4><p>フォロワー1,000人以下には「新人ブースト」と専用の発見ルートがある。小アカウントは不利どころか<b>優遇枠</b>を持っている。</p><span class="why">根拠: ColdStartFollowerCap = 1000 / tailインデックス</span></div>
+  </div>
+</section>
+
+<!-- ================= 5. DON'T ================= -->
+<section id="dont">
+  <p class="eyebrow">だい5しょう ── やってはいけないこと</p>
+  <h2>「注意シール」が貼られる行動</h2>
+  <p class="intro">𝕏は問題のある投稿やアカウントに「ラベル」（注意シール）を自動で貼ります。シールの種類によって、おすすめから消えたり、アカウントごと制限されたりします。これはスコアのマイナスよりずっと重い罰です。</p>
+
+  <div class="cards">
+    <div class="card dont"><span class="badge">✕</span><h4>1. 評判の悪い外部リンクを貼る</h4><p>URLの評判は自動チェックされ、悪質判定なら<b>スパムシール</b>が付く。プロフィールへのピン留めも監視対象。<b>アフィリエイト運用は、リンク先の信頼性が生命線</b>。怪しい短縮URLや誘導ページは絶対に避ける。</p><span class="why">ラベル: SPAM / SPAM_HIGH_RECALL / MALICIOUS_URL</span></div>
+    <div class="card dont"><span class="badge">✕</span><h4>2. コピペ・定型文の量産</h4><p>そっくりな文章の繰り返しは、全投稿を横断する重複検出システムが見つけて<b>コピペスパム判定</b>。テンプレ投稿の使い回しは危険。</p><span class="why">ラベル: COPYPASTA_SPAM</span></div>
+    <div class="card dont"><span class="badge">✕</span><h4>3. バズ投稿への便乗リプライ営業</h4><p>注目投稿のリプ欄での宣伝・定型文リプは、スパム度97%以上で<b>14日間の表示抑制</b>。</p><span class="why">ラベル: RISKY_HIGH_VIZ_REPLY（14日）</span></div>
+    <div class="card dont"><span class="badge">✕</span><h4>4. フォロワー外へのメンション+リンク</h4><p>フォローされていない相手に@メンションで低品質リンクを送りつけると、即スパム判定のルールが存在する。</p><span class="why">ルールID 5239 / 6754</span></div>
+    <div class="card dont"><span class="badge">✕</span><h4>5. 機械みたいな動き</h4><p>フォロー→アンフォローの繰り返し、いいね連打、フォロー直後の一括アクションなどは、行動パターン専門のAI（8種類の検出器）が監視。<b>認証チャレンジ→凍結</b>まである。</p><span class="why">検出器: FollowBot / LikeBot / ReplySpamBot ほか（閾値は非公開）</span></div>
+    <div class="card dont"><span class="badge">✕</span><h4>6. 複数アカウントで自作自演</h4><p>複垢の相互いいね・相互フォローは「関連アカウント」として検出され、<b>信用スコアへの効果がゼロに</b>。協調ボット判定なら凍結コース。</p><span class="why">Linked Users除外 / COORDINATED_INAUTHENTIC_BOT</span></div>
+    <div class="card dont"><span class="badge">✕</span><h4>7. エンゲージメント乞い</h4><p>「いいねした人全員フォローします」「RTで拡散祭り」等は、スパム分類のなかに<b>専用カテゴリが用意されている</b>（エンゲージメント farming／trading／baiting）。</p><span class="why">Grox分類: SpamEngagementFarming ほか9種</span></div>
+    <div class="card dont"><span class="badge">✕</span><h4>8. 釣りタイトルでガッカリさせる</h4><p>開いてガッカリされると「興味なし<b>−43.2</b>」「ミュート<b>−58.8</b>」を押されやすくなる。クリックの+0.4では全く割に合わない。</p><span class="why">NotInterestedWeight = -43.2 / MuteAuthorWeight = -58.8</span></div>
+    <div class="card dont"><span class="badge">✕</span><h4>9. AI量産文の垂れ流し</h4><p>中身の薄いAI生成文には<b>「llm_slop（AIスロップ）」判定</b>があり、30日間のスパムシールが付く。AIは下書きに使っても、自分の言葉に直すこと。</p><span class="why">ラベル: SpamHighRecall（30日）</span></div>
+    <div class="card dont"><span class="badge">✕</span><h4>10. NSFW（不適切コンテンツ）を混ぜる</h4><p>直近5投稿中3投稿がNSFW判定されると<b>アカウントごとNSFWラベル</b>（7日）。そうなるとフォロワー外への露出はほぼゼロに。</p><span class="why">safety-label-user-agg: 5件中3件ルール</span></div>
+  </div>
+
+  <div class="tatoe">
+    <div class="face">🏫</div>
+    <div class="talk"><b>たとえるなら</b>点数表が「テストの成績」なら、ラベルは「生活態度の記録」。成績がどんなに良くても、問題行動の記録が付くと発表会（おすすめ）に出してもらえません。そして記録の多く（7日〜30日）は<em>行いを改めればちゃんと消えます</em>。</div>
+  </div>
+
+  <p style="margin-top:20px">ひとつ安心材料も。内部の信用スコア（PageRank）が高いアカウントは、自動シール貼りの対象から外れて<em>人間のレビューに回される</em>設計です（信用スコアのデータがない場合はフォロワー約25,000人超が目安。正確な閾値は非公開）。真面目に育てたアカウントほど、誤判定に強くなります。</p>
+</section>
+
+<!-- ================= 6. シャドウバン ================= -->
+<section id="shadow">
+  <p class="eyebrow">だい6しょう ── シャドウバン</p>
+  <h2>「シャドウバン」の正体は3段階</h2>
+  <p class="intro">コードを読むと、「見えなくなる」には3つのレベルがあることがはっきり分かります。俗に言うシャドウバンは真ん中のレベルです。</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>レベル</th><th>何が起きる？</th><th>主な原因（ラベル）</th></tr></thead>
+      <tbody>
+        <tr><td class="lv l1">完全非表示</td><td>フォロワーのタイムラインからも消える</td><td><code>SPAM</code>、<code>PDNA</code>、ヘイト・暴力的発言系（<code>FOSNR_*</code>）、法的削除</td></tr>
+        <tr><td class="lv l2">おすすめ除外<br>（＝シャドウバン）</td><td><b>フォロワーには普通に見えるが、フォロワー外のおすすめに一切出ない</b>。検索・拡散も止まる</td><td><code>SPAM_HIGH_RECALL</code>、<code>DO_NOT_AMPLIFY</code>、NSFW系アカウントラベル、なりすまし判定、乗っ取り疑い</td></tr>
+        <tr><td class="lv l3">ぼかし表示</td><td>「センシティブな内容」の膜がかかり、タップで見られる</td><td><code>NSFW_HIGH_PRECISION</code>、暴力・グロ画像判定</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>自分で確認できる公式ツールがある</h3>
+  <p>𝕏は「Under the Hood」（<a href="https://x.com/i/under_the_hood" rel="noopener">x.com/i/under_the_hood</a>）という透明性ツールを試験公開しています。自分のアカウントと投稿にどんなラベルが付いたか、月ごとの集計を本人だけが見られます（アカウント歴1年以上・月10投稿以上が条件）。「最近急に伸びなくなった」と感じたら、まずここを確認しましょう。</p>
+  <p>そして大事なこと：スパム系・NSFW系のラベルの多くは<em>期限つき（7日〜30日）</em>です。原因になった行動をやめれば、静かに回復します。</p>
+</section>
+
+<!-- ================= 7. チェックリスト ================= -->
+<section id="checklist">
+  <p class="eyebrow">だい7しょう ── まとめ</p>
+  <h2>今日からのチェックリスト</h2>
+  <p class="intro">1万インプレッションを目指すアカウント運用の実践リスト。タップでチェックできます。</p>
+
+  <div class="check">
+    <label><input type="checkbox"><span><span class="c-main">投稿はフォロワーが起きている時間帯に出した</span><span class="c-sub">勢いは8時間で半減。最初の数時間が勝負</span></span></label>
+    <label><input type="checkbox"><span><span class="c-main">投稿後1時間、もらった返信に全部返した</span><span class="c-sub">返信+5点、相互フォロー相手なら+20点</span></span></label>
+    <label><input type="checkbox"><span><span class="c-main">「保存・共有したくなる」要素を1つ入れた</span><span class="c-sub">リンクコピー共有は+20点で最強</span></span></label>
+    <label><input type="checkbox"><span><span class="c-main">広めたい内容はリプライではなくオリジナル投稿にした</span><span class="c-sub">リプライ・リポストはフォロワー外に届かない</span></span></label>
+    <label><input type="checkbox"><span><span class="c-main">前の投稿と内容・文面がかぶっていないか確認した</span><span class="c-sub">連投減点とコピペスパム判定を回避</span></span></label>
+    <label><input type="checkbox"><span><span class="c-main">貼ったリンクは信頼できるドメインだけにした</span><span class="c-sub">アフィリエイトはURL評判が生命線。怪しい短縮URLは使わない</span></span></label>
+    <label><input type="checkbox"><span><span class="c-main">週に1本は10秒超の動画を投稿した</span><span class="c-sub">動画だけが持つ30日間の発見リストを活用</span></span></label>
+    <label><input type="checkbox"><span><span class="c-main">自分の「クラブ」（界隈）に深く刺さる内容にした</span><span class="c-sub">拡散は総いいね数よりコミュニティ内の集中度</span></span></label>
+    <label><input type="checkbox"><span><span class="c-main">エンゲージメント乞い・便乗リプ営業をしていない</span><span class="c-sub">専用のスパム分類とラベルが待っている</span></span></label>
+    <label><input type="checkbox"><span><span class="c-main">月1回、Under the Hoodでラベルを確認した</span><span class="c-sub">x.com/i/under_the_hood で本人だけ確認できる</span></span></label>
+  </div>
+
+  <div class="tatoe" style="margin-top:28px">
+    <div class="face">🌱</div>
+    <div class="talk"><b>最後にひとこと</b>このアルゴリズムを一言でいうと「<em>見る人をガッカリさせない人が勝つ</em>」設計です。裏ワザ探しより、共有したくなる投稿と本物の仲間づくり。それがコードに書かれた最短ルートでした。</div>
+  </div>
+</section>
+
+<!-- ================= sources ================= -->
+<footer class="sources">
+  <h2>出典と注意書き</h2>
+  <p>本ガイドは <a href="https://github.com/xai-org/x-algorithm" rel="noopener">xai-org/x-algorithm</a>（コミット d0cef2f、2026年8月14日版、全2,024ファイル）の解析にもとづきます。解析日: 2026年8月21日。</p>
+  <ul>
+    <li>数値の主な出典: <code>home-mixer/params/param.rs</code>（点数表）、<code>home-mixer/params/config.rs</code>（35件・50件・48時間）、<code>home-mixer/scorers/ranking_scorer.rs</code>（計算式）、<code>visibility-filtering/rules/registry.rs</code>（表示ルール54種）、<code>phoenix-rankall-strato/</code>（拡散インデックス）、<code>simclusters/</code>（いいね8個・8時間半減）、<code>botmaker-rules/</code>・<code>abuse-enforcement-service/</code>（ラベルルール）</li>
+    <li>本番の値は設定システム（feature switch）で随時変わります。リポジトリの値は定期同期されたスナップショットです。</li>
+    <li>ゲーム対策のため一部は非公開です（Grokの判定プロンプト、botmakerルールの一部、ボット検出の発動閾値など）。</li>
+    <li>このガイドは仕組みの解説であり、規約違反の回避テクニックを推奨するものではありません。</li>
+  </ul>
+</footer>
+
+</div>
+</body>
+</html>
