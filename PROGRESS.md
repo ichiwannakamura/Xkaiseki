@@ -16,6 +16,7 @@ Xkaiseki v1.0 を Streamlit Cloud にデプロイし、誰でも使える状態�
 
 ## ✅ 完了したタスク (Done)
 
+- [x] 2026-08-21: xai-org/x-algorithm（2026年8月14日版・全2,024ファイル）の完全解析 → `docs/x-algorithm-analysis.md`（技術詳細）+ `docs/x-algorithm-guide.html`（一般向け運用ガイド）を作成
 - [x] 設計書作成・承認（docs/superpowers/specs/2026-03-19-xkaiseki-design.md）
 - [x] 実装計画書作成（docs/superpowers/plans/2026-03-19-xkaiseki.md）
 - [x] プロジェクト初期化（git init + 5管理ファイル配置）
